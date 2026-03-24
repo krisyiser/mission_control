@@ -43,6 +43,10 @@ To start a work cycle, simply ask the agent: "Run the fleet-worker workflow".
 
 To use this on your other 3 laptops:
 1. Copy this file to `.agent/workflows/fleet-worker.md`.
-2. Ensure you have the `MISSION_CONTROL_URL` and `MACHINE_ID` set in your environment or a `.env` file.
+2. Register the machine by running:
+   ```bash
+   node scripts/register-machine.js https://mission-control-krisyiser.netlify.app
+   ```
+3. The `MACHINE_ID` will be automatically set to your `hostname`.
 
 **Ready to start the fleet?**
