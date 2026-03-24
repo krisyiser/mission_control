@@ -7,44 +7,60 @@ const os = require('os');
 const TARGET_URL = process.argv[2] || 'http://localhost:3000';
 
 function getHardwareInfo() {
-  let model = 'Unknown Mac';
+  let model = os.hostname();
   let cpu = os.cpus()[0].model;
   let ram = `${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`;
   let os_name = `${os.type()} ${os.release()}`;
 
   try {
-    if (process.platform === 'darwin') {
+    if (process.platform === 'win32') {
+      // Windows hardware detection
+      const modelInfo = execSync('wmic csproduct get name').toString();
+      model = modelInfo.split('\n')[1].trim();
+      
+      const osInfo = execSync('wmic os get Caption').toString();
+      os_name = osInfo.split('\n')[1].trim();
+      
+      const ramInfo = execSync('wmic computersystem get TotalPhysicalMemory').toString();
+      const rawRam = parseInt(ramInfo.split('\n')[1].trim());
+      ram = `${Math.round(rawRam / 1024 / 1024 / 1024)}GB`;
+    } else if (process.platform === 'darwin') {
+      // Mac hardware detection
       const systemProfiler = execSync('system_profiler SPHardwareDataType').toString();
       const modelMatch = systemProfiler.match(/Model Name: (.*)/);
       if (modelMatch) model = modelMatch[1].trim();
       
+      const cpuMatch = systemProfiler.match(/Processor Name: (.*)/);
+       if (cpuMatch) cpu = cpuMatch[1].trim();
+
       const osVersion = execSync('sw_vers -productVersion').toString().trim();
       os_name = `macOS ${osVersion}`;
     }
   } catch (err) {
-    console.error('Error fetching deep hardware info:', err.message);
+    console.warn('Hardware detection warning:', err.message);
   }
 
   return {
     id: os.hostname(),
     name: os.hostname(),
-    model,
-    cpu,
-    ram,
-    os: os_name,
+    model: model || 'Unknown Device',
+    cpu: cpu || 'Unknown CPU',
+    ram: ram || 'Unknown RAM',
+    os: os_name || 'Unknown OS',
     status: 'online'
   };
 }
 
 const data = JSON.stringify(getHardwareInfo());
-console.log('Sending Registration to Mission Control:', data);
+console.log('--- JOINING FLEET ---');
+console.log('Hardware detected:', data);
 
 const urlObj = new URL(`${TARGET_URL}/api/heartbeat`);
 const options = {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Content-Length': data.length
+    'Content-Length': Buffer.byteLength(data)
   }
 };
 
@@ -55,15 +71,17 @@ const req = protocol.request(urlObj, options, (res) => {
   res.on('data', (d) => responseBody += d);
   res.on('end', () => {
     if (res.statusCode === 200) {
-      console.log('✅ Machine registered successfully!');
+      console.log('✅ [SUCCESS] Machine registered successfully with specs!');
     } else {
-      console.error('❌ Registration failed:', res.statusCode, responseBody);
+      console.error('❌ [ERROR] Registration failed:', res.statusCode, responseBody);
+      process.exit(1);
     }
   });
 });
 
 req.on('error', (e) => {
-  console.error('❌ Connection error:', e.message);
+  console.error('❌ [ERROR] Connection error:', e.message);
+  process.exit(1);
 });
 
 req.write(data);
